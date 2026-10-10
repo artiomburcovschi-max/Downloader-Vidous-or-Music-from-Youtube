@@ -90,18 +90,16 @@ class Downloader:
     def _build_command(self, is_video, is_playlist, target_path, url):
         out_template = os.path.join(target_path, "%(title)s.%(ext)s")
         archive_path = os.path.join(target_path, ".downloaded_archive.txt")
-        
+
         if is_playlist and self._ask_yes_no("Создать отдельную папку для этого плейлиста?"):
             out_template = os.path.join(target_path, "%(playlist_title)s", "%(title)s.%(ext)s")
 
         yt_dlp_bin = self._get_binary_path("yt-dlp")
-        ffmpeg_bin = self._get_binary_path("ffmpeg")
 
         if is_video:
             cmd = [
                 yt_dlp_bin,
                 "-f", "bv*[height<=1080]+ba/b[height<=1080]",
-                "--ffmpeg-location", ffmpeg_bin,
                 "--no-warnings",
                 "--download-archive", archive_path,
                 "-o", out_template
@@ -112,15 +110,20 @@ class Downloader:
                 "-x",
                 "--audio-format", "mp3",
                 "--audio-quality", "0",
-                "--ffmpeg-location", ffmpeg_bin,
                 "--no-warnings",
                 "--download-archive", archive_path,
                 "-o", out_template
             ]
 
+        # Добавляем --ffmpeg-location только если запущено из скомпилированного .exe на Windows
+        if hasattr(sys, '_MEIPASS'):
+            ffmpeg_dir = sys._MEIPASS
+            cmd.extend(["--ffmpeg-location", ffmpeg_dir])
+
         cmd.append("--yes-playlist" if is_playlist else "--no-playlist")
         cmd.append(url)
         return cmd
+
 
     def start_menu(self):
         while True:
