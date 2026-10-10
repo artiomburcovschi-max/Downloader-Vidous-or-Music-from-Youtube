@@ -87,7 +87,7 @@ class Downloader:
                 self.Video_path = os.path.abspath(os.path.expanduser(new_path))
                 self._check_and_create_paths(self.Video_path)
 
-    def _build_command(self, is_video, is_playlist, target_path, url):
+     def _build_command(self, is_video, is_playlist, target_path, url):
         out_template = os.path.join(target_path, "%(title)s.%(ext)s")
         archive_path = os.path.join(target_path, ".downloaded_archive.txt")
 
