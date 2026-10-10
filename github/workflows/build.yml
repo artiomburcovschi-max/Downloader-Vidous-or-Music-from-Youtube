@@ -1,0 +1,43 @@
+﻿name: Build Autonomic EXE
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies from requirements.txt
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Download yt-dlp.exe and ffmpeg.exe
+      shell: bash
+      run: |
+        curl -L https://github.com -o yt-dlp.exe
+        curl -L https://gyan.dev -o ffmpeg.zip
+        powershell Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extracted
+        Get-ChildItem -Path ffmpeg_extracted -Filter ffmpeg.exe -Recurse | Copy-Item -Destination .
+        rm -rf ffmpeg.zip ffmpeg_extracted
+
+    - name: Build All-in-One EXE with PyInstaller
+      run: |
+        pyinstaller --onefile --name="MediaDownloader" --add-binary "yt-dlp.exe;." --add-binary "ffmpeg.exe;." downloader.py
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MediaDownloader-Standalone
+        path: dist/MediaDownloader.exe
