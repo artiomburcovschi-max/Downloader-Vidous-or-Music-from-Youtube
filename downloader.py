@@ -1,7 +1,8 @@
-﻿import os
+import os
 import subprocess
 import platform
 import sys
+import json
 import logging
 from art import tprint
 
@@ -10,23 +11,13 @@ class Downloader:
         self.url_input = ""
         self.choice_p = ""
         self.choice = ""
-        
+
         self.os_base = platform.system()
         self.os_detailed = self._get_os()
+        self.config_file = "config.json"
 
-        if self.os_base == "Windows":
-            self.Music_path = r"C:\Users\ARTIOM\Music"
-            self.Video_path = r"C:\Users\ARTIOM\Videos"
-        elif self.os_base == "Linux":
-            if os.path.exists("/data/data/com.termux"):
-                self.Music_path = os.path.expanduser("~/storage/shared/Download")
-                self.Video_path = os.path.expanduser("~/storage/shared/Download")
-            else:
-                self.Music_path = os.path.expanduser("~/Downloads")
-                self.Video_path = os.path.expanduser("~/Downloads")
-        else:
-            self.Music_path = os.getcwd()
-            self.Video_path = os.getcwd()
+        # Загружаем сохраненные пути или устанавливаем дефолтные
+        self._load_config()
 
         self._check_and_create_paths(self.Music_path)
         self._check_and_create_paths(self.Video_path)
@@ -43,6 +34,42 @@ class Downloader:
                     return "Android (Termux)"
                 return "Linux"
         return self.os_base
+
+    def _load_config(self):
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.Music_path = data.get("Music_path")
+                    self.Video_path = data.get("Video_path")
+                    if self.Music_path and self.Video_path:
+                        return
+            except Exception as e:
+                logging.warning(f"Ошибка чтения конфига: {e}")
+
+        # Дефолтные пути, если конфига нет
+        if os.path.exists("/data/data/com.termux"):
+            self.Music_path = "/sdcard/Download/music_video/music"
+            self.Video_path = "/sdcard/Download/music_video/video"
+        elif self.os_base == "Windows":
+            self.Music_path = r"C:\Users\ARTIOM\Music"
+            self.Video_path = r"C:\Users\ARTIOM\Videos"
+        else:
+            self.Music_path = os.path.expanduser("~/Downloads")
+            self.Video_path = os.path.expanduser("~/Downloads")
+        
+        self._save_config()
+
+    def _save_config(self):
+        try:
+            data = {
+                "Music_path": self.Music_path,
+                "Video_path": self.Video_path
+            }
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            logging.warning(f"Ошибка сохранения конфига: {e}")
 
     def _check_and_create_paths(self, path):
         try:
@@ -81,13 +108,32 @@ class Downloader:
             if new_path:
                 self.Music_path = os.path.abspath(os.path.expanduser(new_path))
                 self._check_and_create_paths(self.Music_path)
+                self._save_config()
         elif ch == "2":
             new_path = input("Введите новый абсолютный путь для видео: ").strip()
             if new_path:
                 self.Video_path = os.path.abspath(os.path.expanduser(new_path))
                 self._check_and_create_paths(self.Video_path)
+                self._save_config()
 
-     def _build_command(self, is_video, is_playlist, target_path, url):
+    def _show_downloaded_music(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("=" * 50)
+        print("СПИСОК СКАЧАННОЙ МУЗЫКИ")
+        print("=" * 50)
+        if os.path.exists(self.Music_path):
+            files = [f for f in os.listdir(self.Music_path) if f.endswith('.mp3')]
+            if files:
+                for i, file in enumerate(files, 1):
+                    print(f"{i}. {file}")
+            else:
+                print("В папке музыки пока нет MP3 файлов.")
+        else:
+            print("Папка музыки не найдена или к ней нет доступа.")
+        print("=" * 50)
+        input("Нажмите Enter, чтобы вернуться в меню...")
+
+    def _build_command(self, is_video, is_playlist, target_path, url):
         out_template = os.path.join(target_path, "%(title)s.%(ext)s")
         archive_path = os.path.join(target_path, ".downloaded_archive.txt")
 
@@ -115,7 +161,6 @@ class Downloader:
                 "-o", out_template
             ]
 
-        # Добавляем --ffmpeg-location только если запущено из скомпилированного .exe на Windows
         if hasattr(sys, '_MEIPASS'):
             ffmpeg_dir = sys._MEIPASS
             cmd.extend(["--ffmpeg-location", ffmpeg_dir])
@@ -124,26 +169,29 @@ class Downloader:
         cmd.append(url)
         return cmd
 
-
     def start_menu(self):
         while True:
             os.system('cls' if os.name == 'nt' else 'clear')
             tprint("MUSIC - VIDEO", font="small")
-            
+
             print(f"OS: {self.os_detailed}")
             print(f"MUSIC DIR: {self.Music_path}")
             print(f"VIDEO DIR: {self.Video_path}")
             print("=" * 60)
-            
+
             print("Введите:")
             print("1 - целый плейлист")
             print("2 - просто один файл")
             print("3 - Настроить папки сохранения")
-            print("4 - exit")
+            print("4 - Список скачанной музыки")
+            print("5 - exit")
             self.choice_p = input("Ваш выбор: ").strip()
-            
-            if self.choice_p == "4":
+
+            if self.choice_p == "5":
                 break
+            if self.choice_p == "4":
+                self._show_downloaded_music()
+                continue
             if self.choice_p == "3":
                 self._change_paths_menu()
                 continue
@@ -157,14 +205,14 @@ class Downloader:
             print("2 - музыка")
             print("3 - exit")
             self.choice = input("Ваш выбор: ").strip()
-            
+
             if self.choice == "3":
                 break
             if self.choice not in ["1", "2"]:
                 print("Ошибка: введите корректный пункт меню. Нажмите Enter...")
                 input()
                 continue
-            
+
             is_video = (self.choice == "1")
             is_playlist = (self.choice_p == "1")
             target_dir = self.Video_path if is_video else self.Music_path
@@ -177,7 +225,7 @@ class Downloader:
                 continue
 
             cmd = self._build_command(is_video, is_playlist, target_dir, self.url_input)
-            
+
             print(f"\nПередаю управление утилите yt-dlp...")
             try:
                 result = subprocess.run(cmd)
@@ -187,7 +235,7 @@ class Downloader:
                     print("\nЗагрузка завершилась с ошибкой на стороне yt-dlp.")
             except Exception as e:
                 logging.error(f"Критическая ошибка вызова subprocess: {e}")
-            
+
             print("\nНажмите Enter, чтобы вернуться в меню...")
             input()
 
